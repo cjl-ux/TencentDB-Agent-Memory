@@ -32,10 +32,15 @@ import { matchSystemUserByUserId, hasSystemUsers } from "./systemUser.js";
 import { handleSystemUserPassthrough } from "./systemUserPassthrough.js";
 import { estimateAnthropicInputTokens } from "./common/token-estimate.js";
 
-/** 从辅助端点路径提取 agent 前缀（兼容 `/proxy/{spaceId}` 形态）。 */
+/**
+ * 从辅助端点路径提取 agent 前缀。
+ * 标准形态 `/<agent>/<spaceId>/v1/...`；`/proxy/<spaceId>/v1/...` 为 legacy
+ * 无 agent 形态（主链路默认 codebuddy，Chat 客户端不会调用 count_tokens），
+ * 不参与 05A 本地估算，返回空串让上层走原透传路径。
+ */
 function agentFromAuxPath(path: string): string {
   const seg = path.split("/");
-  if (seg[1] === "proxy") return seg[3] ?? "";
+  if (seg[1] === "proxy") return "";
   return seg[1] ?? "";
 }
 
