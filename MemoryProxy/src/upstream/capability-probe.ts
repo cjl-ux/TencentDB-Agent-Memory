@@ -65,23 +65,63 @@ async function probeEndpoint(
   }
 }
 
-/** 探测单个 base URL 的三协议能力（并行、失败降级为 false）。 */
+/** 已知的“完整端点”后缀：配置里可能直接写完整 URL（如 …/chat/completions）。 */
+const KNOWN_ENDPOINT_SUFFIXES = [
+  "/chat/completions",
+  "/v1/messages",
+  "/messages",
+  "/responses",
+] as const;
+
+/** 若 URL 已是完整端点，剥掉端点后缀得到可用于探测兄弟端点的根。 */
+function stripKnownEndpoint(url: string): string {
+  for (const suffix of KNOWN_ENDPOINT_SUFFIXES) {
+    if (url.endsWith(suffix)) return url.slice(0, -suffix.length);
+  }
+  return url;
+}
+
+function unique(xs: string[]): string[] {
+  return [...new Set(xs)];
+}
+
+/** 对一组候选 URL 并行探测，任一命中即认为该协议存在。 */
+async function probeAny(
+  urls: string[],
+  apiKey: string,
+  kind: "chat" | "responses" | "anthropic",
+  timeoutMs: number,
+): Promise<boolean> {
+  const results = await Promise.all(
+    urls.map((url) => probeEndpoint(url, apiKey, kind, timeoutMs)),
+  );
+  return results.some(Boolean);
+}
+
+/**
+ * 探测单个上游 URL 的三协议能力（并行、失败降级为 false）。
+ * 兼容两种配置形态：
+ *  - 协议无关根地址：https://host/v1 → 拼 /chat/completions、/responses、/messages；
+ *  - 完整端点：https://host/v2/chat/completions → 先剥后缀得到根，再对根探测兄弟
+ *    端点（同时保证完整端点自身仍按对应协议探测一次），避免拼出
+ *    …/chat/completions/chat/completions 这类无效路径导致探测静默全失败。
+ */
 export async function probeCapabilities(
   baseUrl: string,
   apiKey: string,
   timeoutMs = 3000,
 ): Promise<UpstreamCapabilities> {
-  const base = baseUrl.replace(/\/+$/, "");
+  const base = (baseUrl.split("?")[0] ?? baseUrl).replace(/\/+$/, "");
+  const root = stripKnownEndpoint(base);
   const [chat, responses, anthropic] = await Promise.all([
-    probeEndpoint(`${base}/chat/completions`, apiKey, "chat", timeoutMs),
-    probeEndpoint(`${base}/responses`, apiKey, "responses", timeoutMs),
-    // Anthropic base 可能是 API 根（.../v1 或 /api/anthropic/v1）也可能是其它形态：
-    // 同时试 {base}/v1/messages 与 {base}/messages，任一命中即支持。
-    (async () => {
-      const withV1 = await probeEndpoint(`${base}/v1/messages`, apiKey, "anthropic", timeoutMs);
-      if (withV1) return true;
-      return probeEndpoint(`${base}/messages`, apiKey, "anthropic", timeoutMs);
-    })(),
+    probeAny(unique([`${root}/chat/completions`]), apiKey, "chat", timeoutMs),
+    probeAny(unique([`${root}/responses`]), apiKey, "responses", timeoutMs),
+    probeAny(
+      unique([`${root}/v1/messages`, `${root}/messages`]),
+      apiKey,
+      "anthropic",
+      timeoutMs,
+    ),
   ]);
   return { chat, responses, anthropic };
 }
