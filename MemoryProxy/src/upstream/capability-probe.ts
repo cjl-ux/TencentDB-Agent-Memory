@@ -156,8 +156,9 @@ export function agentsToAutoDetect(config: ProxyConfig): string[] {
 /** 对需要探测的 agent 逐个探测并合并转换标志（显式配置优先）。 */
 export async function applyAutoDetect(config: ProxyConfig): Promise<void> {
   const timeoutMs = config.upstream.autoDetect?.timeoutMs ?? 3000;
+  const agents = (config.upstream.agents ??= {});
   for (const agent of agentsToAutoDetect(config)) {
-    const entry = config.upstream.agents[agent] ?? {};
+    const entry = agents[agent] ?? {};
     const url = entry.url ?? config.upstream.url;
     const apiKey = entry.apiKey ?? config.upstream.apiKey;
     const caps = await probeCapabilities(url, apiKey, timeoutMs);
@@ -168,7 +169,7 @@ export async function applyAutoDetect(config: ProxyConfig): Promise<void> {
         (merged as unknown as Record<string, unknown>)[k] = true;
       }
     }
-    config.upstream.agents[agent] = merged;
+    agents[agent] = merged;
     log.info("upstream.probe", {
       agent,
       url,

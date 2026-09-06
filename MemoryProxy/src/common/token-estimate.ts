@@ -17,18 +17,22 @@ function jsonLength(v: unknown): number {
 }
 
 /** 估算 Anthropic Messages 请求的 input_tokens（纯函数，便于单测）。 */
-export function estimateAnthropicInputTokens(body: Record<string, unknown>): number {
+export function estimateAnthropicInputTokens(body: unknown): number {
+  const obj =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
   let chars = 0;
-  if (body.system !== undefined) chars += jsonLength(body.system);
-  if (Array.isArray(body.messages)) {
-    for (const m of body.messages) {
+  if (obj.system !== undefined) chars += jsonLength(obj.system);
+  if (Array.isArray(obj.messages)) {
+    for (const m of obj.messages) {
       chars += jsonLength(m);
       // 每条消息的 role / 结构开销近似 4 token
       chars += 16;
     }
   }
-  if (body.tools !== undefined) chars += jsonLength(body.tools);
-  if (body.metadata !== undefined) chars += jsonLength(body.metadata);
+  if (obj.tools !== undefined) chars += jsonLength(obj.tools);
+  if (obj.metadata !== undefined) chars += jsonLength(obj.metadata);
   // 保守下限：空请求也算少量 token，避免返回 0 让客户端误判“零上下文”。
   return Math.max(1, Math.ceil(chars / 4));
 }

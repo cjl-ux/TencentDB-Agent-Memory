@@ -75,4 +75,11 @@ describe("resolveAgentModesFor / agentsToAutoDetect（泛化探测）", () => {
     expect(list).toContain("my-agent");
     expect(list).not.toContain("workbuddy");
   });
+
+  it("agentsToAutoDetect：upstream.agents 未配置时回落内置三个", () => {
+    const list = agentsToAutoDetect({ upstream: {} } as never);
+    expect(list).toContain("workbuddy");
+    expect(list).toContain("claude-code");
+    expect(list).toContain("codex");
+  });
 });

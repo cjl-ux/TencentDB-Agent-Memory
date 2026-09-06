@@ -225,8 +225,8 @@ export async function handleAuxiliaryEndpoint(
     const ag = config.upstream.agents?.[agent];
     if (ag?.anthropicToChat === true || ag?.anthropicToResponses === true) {
       try {
-        const parsed = JSON.parse(bodyText || "{}") as Record<string, unknown>;
-        const inputTokens = estimateAnthropicInputTokens(parsed ?? {});
+        const parsed = JSON.parse(bodyText || "{}");
+        const inputTokens = estimateAnthropicInputTokens(parsed);
         log.info("aux.count_tokens.estimated", {
           agent,
           inputTokens,

@@ -29,4 +29,11 @@ describe("estimateAnthropicInputTokens（count_tokens 本地兜底）", () => {
   it("空 body 也返回 >= 1", () => {
     expect(estimateAnthropicInputTokens({})).toBeGreaterThanOrEqual(1);
   });
+
+  it("异常输入（null / 字符串 / 数组 / 非 JSON）不抛错且返回 >= 1", () => {
+    expect(estimateAnthropicInputTokens(null)).toBeGreaterThanOrEqual(1);
+    expect(estimateAnthropicInputTokens("hello")).toBeGreaterThanOrEqual(1);
+    expect(estimateAnthropicInputTokens([1, 2, 3])).toBeGreaterThanOrEqual(1);
+    expect(estimateAnthropicInputTokens(42)).toBeGreaterThanOrEqual(1);
+  });
 });
