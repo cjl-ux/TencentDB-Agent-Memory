@@ -1,8 +1,9 @@
 # 协议转换字段映射矩阵（OpenAI Chat / Responses ↔ Anthropic Messages）
 
 > 本文档与测试一一对应：每个状态为 ✅ 的字段都有自动化用例兜底。
-> 全量回归：`npm test`（vitest，98/98 通过：protocol-conformance 61、responses-anthropic-compat 13、
+> 转换层回归：`npm test`（vitest，98/98 通过：protocol-conformance 61、responses-anthropic-compat 13、
 > sse 8、sse-fuzz 4、protocol-stats 4、user-query-extractor 8）。
+> 协议接线分支全量：`npm test` 116/116（转换层 98 + token-estimate 4 + protocol-errors 5 + probe 9）。
 > 分支内全量：`npx tsc --noEmit` 0 错误。
 
 ## 架构
@@ -173,3 +174,11 @@ Responses reasoning item 按官方结构输出 `summary: [{ type: "summary_text"
 | sse-fuzz.test.ts | 4 | 模糊测试：随机输入不崩、任意切分不吞帧、多块拼接一致、1MB 大帧不截断 |
 | protocol-stats.test.ts | 4 | 性能统计：分位数/环形上限/缓存命中/Prometheus 导出 |
 | responses-anthropic-compat.test.ts | 13 | 组合层两跳 + usage 单次统计 + 并行工具回归 |
+
+### 协议接线分支额外测试（计入分支全量 116）
+
+| 文件 | 用例数 | 覆盖 |
+|---|---|---|
+| token-estimate.test.ts | 4 | count_tokens 本地估算（正常/超长/异常输入归一，不抛错） |
+| protocol-errors.test.ts | 5 | 接线层协议错误/非流式路径（HTTP 状态拦截、错误体不进入转换器） |
+| probe.test.ts | 9 | autoDetect：内置客户端原生协议注册表 + 配置出现 agent 泛化 + 显式配置跳过探测 + agents 缺省 |
