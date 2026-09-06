@@ -30,6 +30,14 @@ import { log } from "./report/log.js";
 import { verifyUserKey } from "./auth.js";
 import { matchSystemUserByUserId, hasSystemUsers } from "./systemUser.js";
 import { handleSystemUserPassthrough } from "./systemUserPassthrough.js";
+import { estimateAnthropicInputTokens } from "./common/token-estimate.js";
+
+/** 从辅助端点路径提取 agent 前缀（兼容 `/proxy/{spaceId}` 形态）。 */
+function agentFromAuxPath(path: string): string {
+  const seg = path.split("/");
+  if (seg[1] === "proxy") return seg[3] ?? "";
+  return seg[1] ?? "";
+}
 
 /** Hop-by-hop headers 与 host header：不能透传到 upstream。 */
 const SKIP_REQUEST_HEADERS = new Set([
@@ -209,6 +217,27 @@ export async function handleAuxiliaryEndpoint(
   const rawBody = await c.req.arrayBuffer();
   const bodyText = new TextDecoder().decode(rawBody);
   const modelId = extractModelId(bodyText);
+
+  // ── 05A 兜底：Claude Code → Chat/Responses 上游时，count_tokens 无对位端点，
+  // 本地估算后直接应答（只用于客户端上下文条提示，不做计费依据）。
+  if (entry.pathSuffix === "/v1/messages/count_tokens") {
+    const agent = agentFromAuxPath(c.req.path);
+    const ag = config.upstream.agents?.[agent];
+    if (ag?.anthropicToChat === true || ag?.anthropicToResponses === true) {
+      try {
+        const parsed = JSON.parse(bodyText || "{}") as Record<string, unknown>;
+        const inputTokens = estimateAnthropicInputTokens(parsed ?? {});
+        log.info("aux.count_tokens.estimated", {
+          agent,
+          inputTokens,
+          reason: "converted_upstream",
+        });
+        return c.json({ input_tokens: inputTokens }, 200);
+      } catch {
+        // body 不是 JSON：继续走透传，由上游决定报错形态。
+      }
+    }
+  }
 
   // 3. 拼接 upstream URL（复用 joinUrl，天然消费白名单表）
   const upstreamUrl = joinUrl(config.upstream.url, c.req.path);

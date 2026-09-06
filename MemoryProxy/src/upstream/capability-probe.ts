@@ -86,38 +86,82 @@ export async function probeCapabilities(
   return { chat, responses, anthropic };
 }
 
-/** 客户端协议 × 上游能力 → 转换标志（客户端原生协议优先，direct 不设任何标志）。 */
+/** 每个客户端的原生协议（决定探测到上游能力后要补哪些转换开关）。 */
+export const NATIVE_PROTOCOLS: Record<
+  string,
+  ReadonlyArray<"chat" | "responses" | "anthropic">
+> = {
+  workbuddy: ["chat", "responses"], // 网页走 Chat、桌面走 Responses
+  "claude-code": ["anthropic"],
+  codex: ["responses"],
+  codebuddy: ["chat"],
+};
+
+/** 显式配置过的转换开关：置 true 即跳过探测（用户意图优先）。 */
+const EXPLICIT_FLAGS = [
+  "chatCompletions",
+  "chatToAnthropic",
+  "anthropicToChat",
+  "anthropicToResponses",
+  "responsesToAnthropic",
+] as const;
+
+/** 单个客户端的协议 × 上游能力 → 转换标志（原生协议优先，direct 不设标志）。 */
+export function resolveAgentModesFor(
+  agent: string,
+  caps: UpstreamCapabilities,
+): Partial<AgentUpstreamEntry> {
+  const native = NATIVE_PROTOCOLS[agent];
+  if (!native) return {};
+  const out: Partial<AgentUpstreamEntry> = {};
+  if (native.includes("anthropic")) {
+    if (!caps.anthropic && caps.chat) out.anthropicToChat = true;
+    else if (!caps.anthropic && !caps.chat && caps.responses) out.anthropicToResponses = true;
+  }
+  if (native.includes("responses")) {
+    if (!caps.responses && caps.anthropic) out.responsesToAnthropic = true;
+    else if (!caps.responses && !caps.anthropic && caps.chat) out.chatCompletions = true;
+  }
+  if (native.includes("chat")) {
+    if (!caps.chat && caps.anthropic) out.chatToAnthropic = true;
+  }
+  return out;
+}
+
+/** 兼容旧测试/调用方：按三个内置 agent 返回模式表。 */
 export function resolveAgentModes(
   caps: UpstreamCapabilities,
 ): Record<string, Partial<AgentUpstreamEntry>> {
-  const wb: Partial<AgentUpstreamEntry> = {};
-  // WorkBuddy 有两条协议路径：网页端走 Chat，桌面端走 Responses，都要按
-  // 上游能力独立给出转换标志（两条路径互不替代）。
-  if (!caps.chat && caps.anthropic) wb.chatToAnthropic = true;
-  if (!caps.responses && caps.anthropic) wb.responsesToAnthropic = true;
-  if (!caps.responses && !caps.anthropic && caps.chat) wb.chatCompletions = true;
-
-  const cc: Partial<AgentUpstreamEntry> = {};
-  if (!caps.anthropic && caps.chat) cc.anthropicToChat = true;
-  else if (!caps.anthropic && !caps.chat && caps.responses) cc.anthropicToResponses = true;
-
-  const cx: Partial<AgentUpstreamEntry> = {};
-  if (!caps.responses && caps.anthropic) cx.responsesToAnthropic = true;
-  else if (!caps.responses && !caps.anthropic && caps.chat) cx.chatCompletions = true;
-
-  return { workbuddy: wb, "claude-code": cc, codex: cx };
+  return {
+    workbuddy: resolveAgentModesFor("workbuddy", caps),
+    "claude-code": resolveAgentModesFor("claude-code", caps),
+    codex: resolveAgentModesFor("codex", caps),
+  };
 }
 
-/** 对已知 agent 逐个探测并合并转换标志（显式配置优先）。 */
+/**
+ * 待探测集合 = 内置客户端 ∪ 配置里出现过的 agent，去掉已显式配置转换开关的项
+ * （显式配置优先，也避免多余探测请求）。
+ */
+export function agentsToAutoDetect(config: ProxyConfig): string[] {
+  const agents = new Set<string>(["workbuddy", "claude-code", "codex"]);
+  for (const name of Object.keys(config.upstream.agents ?? {})) agents.add(name);
+  return [...agents].filter((agent) => {
+    const entry = config.upstream.agents?.[agent];
+    if (!entry) return true;
+    return !EXPLICIT_FLAGS.some((f) => entry[f as keyof AgentUpstreamEntry] === true);
+  });
+}
+
+/** 对需要探测的 agent 逐个探测并合并转换标志（显式配置优先）。 */
 export async function applyAutoDetect(config: ProxyConfig): Promise<void> {
   const timeoutMs = config.upstream.autoDetect?.timeoutMs ?? 3000;
-  const knownAgents = ["workbuddy", "claude-code", "codex"];
-  for (const agent of knownAgents) {
+  for (const agent of agentsToAutoDetect(config)) {
     const entry = config.upstream.agents[agent] ?? {};
     const url = entry.url ?? config.upstream.url;
     const apiKey = entry.apiKey ?? config.upstream.apiKey;
     const caps = await probeCapabilities(url, apiKey, timeoutMs);
-    const mode = resolveAgentModes(caps)[agent] ?? {};
+    const mode = resolveAgentModesFor(agent, caps);
     const merged: AgentUpstreamEntry = { ...entry };
     for (const [k, v] of Object.entries(mode)) {
       if (v === true && merged[k as keyof AgentUpstreamEntry] === undefined) {
