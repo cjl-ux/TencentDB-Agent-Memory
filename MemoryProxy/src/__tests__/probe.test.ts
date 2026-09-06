@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   resolveAgentModes,
   resolveAgentModesFor,
   agentsToAutoDetect,
 } from "../upstream/capability-probe.js";
+import { probeCapabilities } from "../upstream/capability-probe.js";
 
 describe("resolveAgentModes（上游协议自动选路）", () => {
   it("上游仅支持 Chat：workbuddy 桌面走 chatCompletions，claude-code 走 anthropicToChat，codex 走 chatCompletions", () => {
@@ -81,5 +82,53 @@ describe("resolveAgentModesFor / agentsToAutoDetect（泛化探测）", () => {
     expect(list).toContain("workbuddy");
     expect(list).toContain("claude-code");
     expect(list).toContain("codex");
+  });
+});
+
+describe("probeCapabilities（URL 探测形态兼容）", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const installProbeMock = (): string[] => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({ type: "error", error: { type: "api_error", message: "no" } }),
+        { status: 404 },
+      );
+    }) as typeof fetch;
+    return calls;
+  };
+
+  it("裸根地址按 /chat/completions、/responses、/v1|messages 探测", async () => {
+    const calls = installProbeMock();
+    const caps = await probeCapabilities(
+      "https://up.example.com/v1",
+      "key",
+      50,
+    );
+    expect(caps).toEqual({ chat: false, responses: false, anthropic: false });
+    expect(calls).toContain("https://up.example.com/v1/chat/completions");
+    expect(calls).toContain("https://up.example.com/v1/responses");
+    expect(calls).toContain("https://up.example.com/v1/v1/messages");
+    expect(calls).toContain("https://up.example.com/v1/messages");
+  });
+
+  it("完整端点地址（…/v2/chat/completions）不再拼出双端点，完整端点自身会被探测", async () => {
+    const calls = installProbeMock();
+    await probeCapabilities(
+      "https://up.example.com/v2/chat/completions",
+      "key",
+      50,
+    );
+    expect(calls).not.toContain(
+      "https://up.example.com/v2/chat/completions/chat/completions",
+    );
+    expect(calls).toContain("https://up.example.com/v2/chat/completions");
+    expect(calls).toContain("https://up.example.com/v2/responses");
+    expect(calls).toContain("https://up.example.com/v2/messages");
   });
 });
