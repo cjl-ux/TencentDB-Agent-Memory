@@ -406,8 +406,11 @@ export interface SkillRuntimeConfig {
  * itself is protocol-agnostic.
  */
 export interface AgentUpstreamEntry {
-  /** Target upstream base URL. Required. */
-  url: string;
+  /**
+   * Target upstream base URL. 可省略：省略时回退到全局 `upstream.url`，
+   * 但该 agent 仍可单独声明下面的协议转换开关。
+   */
+  url?: string;
   /**
    * Per-agent apiKey. When set (non-empty):
    *   - OpenAI: `Authorization: Bearer <apiKey>` is injected

@@ -265,7 +265,7 @@ function parseUpstreamAgents(
 ): Record<
   string,
   {
-    url: string;
+    url?: string;
     apiKey?: string;
     chatCompletions?: boolean;
     anthropicToChat?: boolean;
@@ -278,7 +278,7 @@ function parseUpstreamAgents(
   const out: Record<
     string,
     {
-      url: string;
+      url?: string;
       apiKey?: string;
       chatCompletions?: boolean;
       anthropicToChat?: boolean;
@@ -290,19 +290,18 @@ function parseUpstreamAgents(
   for (const [name, entry] of Object.entries(raw)) {
     if (!entry || typeof entry !== "object") continue;
     const url = (entry as { url?: unknown }).url;
-    if (typeof url !== "string" || url.length === 0) continue;
     const apiKey = (entry as { apiKey?: unknown }).apiKey;
     const parsed: {
-      url: string;
+      url?: string;
       apiKey?: string;
       chatCompletions?: boolean;
       anthropicToChat?: boolean;
       chatToAnthropic?: boolean;
       responsesToAnthropic?: boolean;
       anthropicToResponses?: boolean;
-    } = typeof apiKey === "string" && apiKey.length > 0
-      ? { url, apiKey }
-      : { url };
+    } = {};
+    if (typeof url === "string" && url.length > 0) parsed.url = url;
+    if (typeof apiKey === "string" && apiKey.length > 0) parsed.apiKey = apiKey;
     for (const flag of [
       "chatCompletions",
       "anthropicToChat",
@@ -312,7 +311,8 @@ function parseUpstreamAgents(
     ] as const) {
       if ((entry as Record<string, unknown>)[flag] === true) parsed[flag] = true;
     }
-    out[name] = parsed;
+    // 允许“只配转换开关、不配 url”的 agent：url 回退到全局 upstream.url。
+    if (Object.keys(parsed).length > 0) out[name] = parsed;
   }
   return out;
 }
