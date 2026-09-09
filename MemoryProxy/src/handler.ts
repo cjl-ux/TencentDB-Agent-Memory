@@ -57,6 +57,7 @@ import {
   createAnthropicSseToChatSse,
 } from "./common/chat-anthropic-compat.js";
 import { toOpenAiErrorBody } from "./upstream/protocol-errors.js";
+import { filterResponseHeaders, SKIP_REQUEST_HEADERS } from "./upstream/headers.js";
 import { triggerSkillExtractIfReady } from "./skill/handler-glue.js";
 import { emitModelIntentTelemetry } from "./session/model-intent-telemetry.js";
 import { isExtractionAllowed, logExtractionSkipped } from "./extraction-gate.js";
@@ -209,20 +210,6 @@ export function flattenMessagesForOpik(messages: unknown[]): unknown[] {
   }
   return result;
 }
-
-const SKIP_REQUEST_HEADERS = new Set([
-  "host",
-  "content-length",
-  "transfer-encoding",
-  "connection",
-]);
-
-const SKIP_RESPONSE_HEADERS = new Set([
-  "content-encoding",
-  "transfer-encoding",
-  "content-length",
-  "connection",
-]);
 
 /** Extract usage object from a block of OpenAI SSE text. */
 export function extractSseUsage(sseText: string): Record<string, unknown> | null {
@@ -1593,12 +1580,7 @@ export async function handleChatCompletions(
   }
 
   // Build response headers (strip hop-by-hop)
-  const respHeaders = new Headers();
-  for (const [k, v] of upstreamResp.headers.entries()) {
-    if (!SKIP_RESPONSE_HEADERS.has(k.toLowerCase())) {
-      respHeaders.set(k, v);
-    }
-  }
+  const respHeaders = filterResponseHeaders(upstreamResp.headers);
 
   // Upstream request id from response header (tokenhub / OpenAI-compatible
   // gateways set `x-request-id`). Used for cross-system tracing/audit.

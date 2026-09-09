@@ -66,6 +66,7 @@ import {
   createResponsesSseToAnthropicSse,
 } from "./common/responses-anthropic-compat.js";
 import { toAnthropicErrorBody } from "./upstream/protocol-errors.js";
+import { filterResponseHeaders, SKIP_REQUEST_HEADERS } from "./upstream/headers.js";
 import type { CcRequestKind } from "./common/cc-request-classifier.js";
 import { buildRequestDebugMetadata } from "./common/langfuse-debug.js";
 import { resolveAgentAdapter } from "./agent-adapters/index.js";
@@ -74,22 +75,6 @@ import {
   isRateLimitExceededError,
   recordInputTokenUsage,
 } from "./rate-limit/guard.js";
-
-const SKIP_REQUEST_HEADERS = new Set([
-  "host",
-  "content-length",
-  "transfer-encoding",
-  "connection",
-  // 内部身份头只给 proxy/session-init 使用，不能透传给上游模型服务。
-  "x-tdai-user-key",
-]);
-
-const SKIP_RESPONSE_HEADERS = new Set([
-  "content-encoding",
-  "transfer-encoding",
-  "content-length",
-  "connection",
-]);
 
 /**
  * Build a per-request TdaiClient. `spaceId` (extracted from the request path
@@ -1520,12 +1505,7 @@ export async function handleAnthropicMessages(
   }
 
   // Build response headers
-  const respHeaders = new Headers();
-  for (const [k, v] of upstreamResp.headers.entries()) {
-    if (!SKIP_RESPONSE_HEADERS.has(k.toLowerCase())) {
-      respHeaders.set(k, v);
-    }
-  }
+  const respHeaders = filterResponseHeaders(upstreamResp.headers);
 
   // Upstream request id from response header (tokenhub / Anthropic set
   // `x-request-id`). Used for cross-system tracing/audit.

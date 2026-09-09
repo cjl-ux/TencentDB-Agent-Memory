@@ -65,6 +65,7 @@ import {
   anthropicJsonToResponsesJson,
 } from "./common/responses-anthropic-compat.js";
 import { toOpenAiErrorBody } from "./upstream/protocol-errors.js";
+import { filterResponseHeaders, SKIP_REQUEST_HEADERS } from "./upstream/headers.js";
 import {
   getInstanceUpstreamConfigs,
   resolveUpstreamConfig,
@@ -72,21 +73,6 @@ import {
 } from "./instance-upstream-cache.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const SKIP_REQUEST_HEADERS = new Set([
-  "host",
-  "content-length",
-  "transfer-encoding",
-  "connection",
-  "x-tdai-user-key",
-]);
-
-const SKIP_RESPONSE_HEADERS = new Set([
-  "content-encoding",
-  "transfer-encoding",
-  "content-length",
-  "connection",
-]);
 
 // ── TDAI L0 helpers (对齐 anthropicHandler / handler 姿势) ───────────────────
 
@@ -265,16 +251,6 @@ function buildUpstreamHeaders(
     delete headers["x-api-key"];
   }
   return headers;
-}
-
-function filterResponseHeaders(source: Headers): Headers {
-  const out = new Headers();
-  source.forEach((value, key) => {
-    if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
-      out.set(key, value);
-    }
-  });
-  return out;
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

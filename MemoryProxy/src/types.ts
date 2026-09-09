@@ -421,7 +421,9 @@ export interface AgentUpstreamEntry {
    */
   apiKey?: string;
   /**
-   * 上游兼容开关（协议接线用，显式配置优先于 autoDetect 探测结果）：
+   * 上游兼容开关（协议接线用）。显式配置 true 或 false 都优先于 autoDetect
+   * 探测结果：true 启用对应转换，false 明确禁用并阻止 autoDetect 为该 agent
+   * 自动补开关。
    *  - chatCompletions       : Responses 客户端（codex/workbuddy）→ Chat 上游
    *  - anthropicToChat       : Anthropic 客户端（claude-code）→ Chat 上游
    *  - chatToAnthropic       : Chat 客户端（workbuddy）→ Anthropic 上游

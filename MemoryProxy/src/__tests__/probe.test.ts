@@ -77,6 +77,21 @@ describe("resolveAgentModesFor / agentsToAutoDetect（泛化探测）", () => {
     expect(list).not.toContain("workbuddy");
   });
 
+  it("agentsToAutoDetect：显式 false 同样是显式配置，autoDetect 不得再补开关", () => {
+    const list = agentsToAutoDetect({
+      upstream: {
+        agents: {
+          codex: { chatCompletions: false },
+          "claude-code": { responsesToAnthropic: false },
+          workbuddy: {},
+        },
+      },
+    } as never);
+    expect(list).not.toContain("codex");
+    expect(list).not.toContain("claude-code");
+    expect(list).toContain("workbuddy");
+  });
+
   it("agentsToAutoDetect：upstream.agents 未配置时回落内置三个", () => {
     const list = agentsToAutoDetect({ upstream: {} } as never);
     expect(list).toContain("workbuddy");

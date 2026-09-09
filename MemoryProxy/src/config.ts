@@ -309,7 +309,8 @@ function parseUpstreamAgents(
       "responsesToAnthropic",
       "anthropicToResponses",
     ] as const) {
-      if ((entry as Record<string, unknown>)[flag] === true) parsed[flag] = true;
+      const rawFlag = (entry as Record<string, unknown>)[flag];
+      if (typeof rawFlag === "boolean") parsed[flag] = rawFlag;
     }
     // 允许“只配转换开关、不配 url”的 agent：url 回退到全局 upstream.url。
     if (Object.keys(parsed).length > 0) out[name] = parsed;

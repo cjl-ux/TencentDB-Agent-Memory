@@ -68,24 +68,10 @@ import {
   anthropicJsonToResponsesJson,
 } from "./common/responses-anthropic-compat.js";
 import { toOpenAiErrorBody } from "./upstream/protocol-errors.js";
+import { filterResponseHeaders, SKIP_REQUEST_HEADERS } from "./upstream/headers.js";
 import { isExtractionAllowed, logExtractionSkipped } from "./extraction-gate.js";
 
 // ── Handler-level constants ──────────────────────────────────────────────────
-
-const SKIP_REQUEST_HEADERS = new Set([
-  "host",
-  "content-length",
-  "transfer-encoding",
-  "connection",
-  "x-tdai-user-key",
-]);
-
-const SKIP_RESPONSE_HEADERS = new Set([
-  "content-encoding",
-  "transfer-encoding",
-  "content-length",
-  "connection",
-]);
 
 // ── Types (exported for unit tests) ──────────────────────────────────────────
 
@@ -475,14 +461,6 @@ function buildUpstreamHeaders(c: Context, config: ProxyConfig): Record<string, s
     delete h["x-api-key"];
   }
   return h;
-}
-
-function filterResponseHeaders(source: Headers): Headers {
-  const out = new Headers();
-  source.forEach((v, k) => {
-    if (!SKIP_RESPONSE_HEADERS.has(k.toLowerCase())) out.set(k, v);
-  });
-  return out;
 }
 
 /**

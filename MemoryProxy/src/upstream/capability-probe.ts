@@ -137,7 +137,7 @@ export const NATIVE_PROTOCOLS: Record<
   codebuddy: ["chat"],
 };
 
-/** 显式配置过的转换开关：置 true 即跳过探测（用户意图优先）。 */
+/** 显式配置过的转换开关（true/false 都算）：配置了就不让 autoDetect 覆盖（用户意图优先）。 */
 const EXPLICIT_FLAGS = [
   "chatCompletions",
   "chatToAnthropic",
@@ -189,7 +189,9 @@ export function agentsToAutoDetect(config: ProxyConfig): string[] {
   return [...agents].filter((agent) => {
     const entry = config.upstream.agents?.[agent];
     if (!entry) return true;
-    return !EXPLICIT_FLAGS.some((f) => entry[f as keyof AgentUpstreamEntry] === true);
+    return !EXPLICIT_FLAGS.some(
+      (f) => entry[f as keyof AgentUpstreamEntry] !== undefined,
+    );
   });
 }
 
